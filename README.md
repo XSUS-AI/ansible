@@ -36,15 +36,42 @@ cd ansible
 
 ## Installation
 
-1. Install the required dependencies:
+### Automated Setup
+
+Use the provided setup script to automatically install dependencies:
+
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+This script will install all required dependencies and verify that both Ansible and ansible-runner are properly installed.
+
+### Manual Installation
+
+If you prefer to install dependencies manually:
+
+1. Install the required Python packages:
    ```bash
    pip install -r requirements.txt
    ```
 
-2. Create a `.env` file with your API keys:
+2. If ansible-runner is not properly installed after this, install it directly:
+   ```bash
+   pip install ansible-runner
    ```
-   OPENROUTER_API_KEY=your_openrouter_key
+
+3. Verify Ansible is installed and available in your PATH:
+   ```bash
+   ansible --version
    ```
+
+### Configuration
+
+Create a `.env` file with your API keys:
+```
+OPENROUTER_API_KEY=your_openrouter_key
+```
 
 ## Usage
 
@@ -57,6 +84,15 @@ You can specify a different model:
 ```bash
 python agent.py --model anthropic/claude-3-opus
 ```
+
+### Troubleshooting
+
+If you encounter errors when starting the agent, check the debug logs at `logs/debug.log` for detailed error messages.
+
+Common issues:
+- Missing dependencies: Run the `setup.sh` script to install them
+- API key not found: Ensure your `.env` file contains the necessary API keys
+- SSH keys not configured: The agent uses system SSH keys for authentication
 
 ### Example Operations
 
@@ -78,8 +114,11 @@ python agent.py --model anthropic/claude-3-opus
 ├── .well-known/           # Agent card metadata
 │   └── agent.json         # A2A Agent card
 ├── agent.py               # Agent runner script
+├── logs/                  # Log files
+│   └── debug.log          # Debug logs
 ├── prompts.json           # Sample prompts for testing
 ├── requirements.txt       # Python dependencies
+├── setup.sh               # Setup script for dependencies
 └── README.md              # This file
 ```
 
