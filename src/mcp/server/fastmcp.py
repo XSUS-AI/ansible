@@ -1,206 +1,224 @@
-"""FastMCP - Simplified MCP server implementation"""
-import sys
-import json
 import asyncio
-from typing import List, Dict, Any, Callable, Optional, Union, TypeVar, Awaitable
-from pydantic import BaseModel
+from contextlib import asynccontextmanager
+import inspect
+import logging
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Type, TypeVar, Union, get_type_hints, cast
 
-T = TypeVar('T')
-U = TypeVar('U')
+from pydantic import BaseModel, create_model
 
+logger = logging.getLogger(__name__)
+
+# Define Context class for tool methods
 class Context:
-    """Context for MCP tools"""
-    def __init__(self, request_id: str, request_context: Any):
-        self.request_id = request_id
+    """Context object passed to tool methods providing access to request context and utilities"""
+    
+    def __init__(self, request_context: Any):
         self.request_context = request_context
-
+    
     async def info(self, message: str) -> None:
-        """Send informational message"""
-        response = {
-            "type": "info", 
-            "requestId": self.request_id, 
-            "message": message
-        }
-        print(json.dumps(response), flush=True)
+        """Log an informational message"""
+        logger.info(message)
+    
+    async def warn(self, message: str) -> None:
+        """Log a warning message"""
+        logger.warning(message)
+    
+    async def error(self, message: str) -> None:
+        """Log an error message"""
+        logger.error(message)
+    
+    async def report_progress(self, current: int, total: int) -> None:
+        """Report progress of a long-running operation"""
+        logger.info(f"Progress: {current}/{total}")
+    
+    async def read_resource(self, uri: str) -> tuple[str, str]:
+        """Read the content of a resource by URI
+        
+        Returns:
+            Tuple of (content, mime_type)
+        """
+        logger.info(f"Reading resource: {uri}")
+        # This would call the actual resource reading implementation
+        return ("", "text/plain")
+
+
+# Type variable for generic functions
+T = TypeVar("T")
+LifespanT = TypeVar("LifespanT")
 
 
 class FastMCP:
-    """Fast Model Context Protocol (MCP) server implementation"""
-    def __init__(
-        self, 
-        name: str, 
-        version: str = "0.1.0", 
-        dependencies: List[str] = None,
-        lifespan = None
-    ):
+    """FastMCP server implementation for the Model Context Protocol"""
+    
+    def __init__(self, 
+                 name: str, 
+                 dependencies: Optional[List[str]] = None,
+                 lifespan: Optional[Callable[..., AsyncIterator[Any]]] = None):
+        """Initialize the FastMCP server
+        
+        Args:
+            name: Name of the server
+            dependencies: List of Python package dependencies required
+            lifespan: Optional async context manager for server lifecycle
+        """
         self.name = name
-        self.version = version
         self.dependencies = dependencies or []
-        self.tools = {}
         self.lifespan = lifespan
-        self.lifespan_context = {}
-        self._lock = asyncio.Lock()
-
-    def tool(self):
-        """Decorator to register a tool"""
-        def decorator(func: Callable[[Any, Context], Awaitable[Any]]):
-            self.tools[func.__name__] = func
+        self.tools: Dict[str, Any] = {}
+        self.resources: Dict[str, Any] = {}
+        self.prompts: Dict[str, Any] = {}
+        self.request_context: Dict[str, Any] = {}
+        
+        logger.info(f"Initializing FastMCP server: {name}")
+    
+    def tool(self) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Decorator to register a function as an MCP tool
+        
+        Example:
+            @mcp.tool()
+            def my_tool(param1: str, param2: int) -> str:
+                return f"{param1}: {param2}"
+        """
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            tool_name = func.__name__
+            doc = func.__doc__ or f"{tool_name} tool"
+            
+            # Get function parameters and create model
+            sig = inspect.signature(func)
+            params = {}
+            for param_name, param in sig.parameters.items():
+                if param_name == "ctx" or param_name == "context":
+                    continue  # Skip context parameter
+                # Get type annotation if available
+                param_type = param.annotation if param.annotation != inspect.Parameter.empty else Any
+                # Get default value if available
+                default = param.default if param.default != inspect.Parameter.empty else ...
+                # Add to params dict
+                params[param_name] = (param_type, default)
+            
+            # Create request model dynamically
+            request_model = create_model(f"{tool_name.title()}Request", **params)  # type: ignore
+            
+            # Store the tool info
+            self.tools[tool_name] = {
+                "func": func,
+                "doc": doc,
+                "request_model": request_model,
+            }
+            
             return func
+        
         return decorator
-
-    async def handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle an MCP request"""
-        request_id = request.get("requestId", "")
-        request_type = request.get("type", "")
+    
+    def resource(self, uri_template: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Decorator to register a function as an MCP resource provider
         
-        if request_type == "listTools":
-            tool_specs = []
-            for tool_name, tool_func in self.tools.items():
-                # Determine parameter schema from function annotations
-                param_model = None
-                for param_name, param_type in tool_func.__annotations__.items():
-                    if param_name != "return" and param_name != "ctx":
-                        param_model = param_type
-                        break
-                
-                # Get return type
-                return_model = tool_func.__annotations__.get("return")
-                
-                # Create tool spec
-                tool_spec = {
-                    "name": tool_name,
-                    "description": tool_func.__doc__ or "",
-                }
-                
-                # Add parameter schema if available
-                if param_model and hasattr(param_model, "model_json_schema"):
-                    param_schema = param_model.model_json_schema()
-                    tool_spec["parameters"] = param_schema
-                
-                # Add return schema if available
-                if return_model and hasattr(return_model, "model_json_schema"):
-                    return_schema = return_model.model_json_schema()
-                    tool_spec["returnSchema"] = return_schema
-                
-                tool_specs.append(tool_spec)
+        Example:
+            @mcp.resource("user://{user_id}/profile")
+            def get_user_profile(user_id: str) -> str:
+                return f"Profile for user {user_id}"
+        """
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            resource_name = func.__name__
+            doc = func.__doc__ or f"{resource_name} resource"
             
-            return {
-                "type": "listToolsResponse",
-                "requestId": request_id,
-                "tools": tool_specs
+            # Store the resource info
+            self.resources[uri_template] = {
+                "func": func,
+                "doc": doc,
             }
+            
+            return func
         
-        elif request_type == "callTool":
-            tool_name = request.get("name", "")
-            parameters = request.get("parameters", {})
-            
-            if tool_name not in self.tools:
-                return {
-                    "type": "callToolError",
-                    "requestId": request_id,
-                    "error": f"Tool '{tool_name}' not found"
-                }
-            
-            tool_func = self.tools[tool_name]
-            
-            # Find request parameter type
-            param_model = None
-            for param_name, param_type in tool_func.__annotations__.items():
-                if param_name != "return" and param_name != "ctx":
-                    param_model = param_type
-                    break
-            
-            try:
-                # Create the request object from parameters
-                if param_model:
-                    request_obj = param_model.model_validate(parameters)
-                else:
-                    request_obj = parameters
-                
-                # Create context
-                ctx = Context(request_id, self.lifespan_context)
-                
-                # Call the tool
-                result = await tool_func(request_obj, ctx)
-                
-                # Convert to JSON serializable format
-                if hasattr(result, "model_dump"):
-                    result = result.model_dump()
-                
-                return {
-                    "type": "callToolResponse",
-                    "requestId": request_id,
-                    "result": result
-                }
-            
-            except Exception as e:
-                return {
-                    "type": "callToolError",
-                    "requestId": request_id,
-                    "error": str(e)
-                }
+        return decorator
+    
+    def prompt(self) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Decorator to register a function as an MCP prompt provider
         
-        else:
-            return {
-                "type": "error",
-                "requestId": request_id,
-                "error": f"Unknown request type: {request_type}"
+        Example:
+            @mcp.prompt()
+            def greeting(name: str) -> str:
+                return f"Hello {name}, how can I assist you today?"
+        """
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            prompt_name = func.__name__
+            doc = func.__doc__ or f"{prompt_name} prompt"
+            
+            # Get function parameters
+            sig = inspect.signature(func)
+            params = []
+            for param_name, param in sig.parameters.items():
+                if param_name == "ctx" or param_name == "context":
+                    continue  # Skip context parameter
+                params.append({
+                    "name": param_name,
+                    "description": f"{param_name} parameter",  # Basic description
+                    "required": param.default == inspect.Parameter.empty,
+                })
+            
+            # Store the prompt info
+            self.prompts[prompt_name] = {
+                "func": func,
+                "doc": doc,
+                "params": params,
             }
-
-    async def process_requests(self):
-        """Process MCP requests from stdin"""
+            
+            return func
+        
+        return decorator
+    
+    async def _prepare_context(self) -> Dict[str, Any]:
+        """Set up request context and run the lifespan if provided"""
+        context = {}
+        
+        # If we have a lifespan function, run it and get the context
         if self.lifespan:
-            async with self.lifespan(self) as context:
-                self.lifespan_context = context
-                while True:
-                    try:
-                        line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
-                        if not line:
-                            break
-                        
-                        try:
-                            request = json.loads(line)
-                            response = await self.handle_request(request)
-                            print(json.dumps(response), flush=True)
-                        except json.JSONDecodeError:
-                            sys.stderr.write(f"Invalid JSON: {line}\n")
-                    except Exception as e:
-                        sys.stderr.write(f"Error processing request: {str(e)}\n")
-        else:
-            while True:
-                try:
-                    line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
-                    if not line:
-                        break
-                    
-                    try:
-                        request = json.loads(line)
-                        response = await self.handle_request(request)
-                        print(json.dumps(response), flush=True)
-                    except json.JSONDecodeError:
-                        sys.stderr.write(f"Invalid JSON: {line}\n")
-                except Exception as e:
-                    sys.stderr.write(f"Error processing request: {str(e)}\n")
-
-    def run(self):
-        """Run the MCP server"""
-        asyncio.run(self.process_requests())
-
-    async def start(self):
-        """Start the MCP server"""
-        # Send server information
-        server_info = {
-            "type": "serverInfo",
-            "name": self.name,
-            "version": self.version,
-            "dependencies": self.dependencies
-        }
-        print(json.dumps(server_info), flush=True)
+            # Create an async context manager
+            lifespan_context = self.lifespan(self)
+            context = {"lifespan_context_manager": lifespan_context}
+            # Enter the context manager
+            ctx = await lifespan_context.__aenter__()
+            context["lifespan_context"] = ctx
         
-        await self.process_requests()
-
-    def run_async(self):
-        """Run the MCP server in an event loop"""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(self.start())
+        return context
+    
+    async def _cleanup_context(self, context: Dict[str, Any]) -> None:
+        """Clean up any resources in the context"""
+        if "lifespan_context_manager" in context:
+            # Exit the lifespan context manager
+            await context["lifespan_context_manager"].__aexit__(None, None, None)
+    
+    def run(self) -> None:
+        """Run the FastMCP server"""
+        logger.info(f"Starting FastMCP server: {self.name}")
+        
+        # In practice, this would set up the MCP protocol handlers and transport
+        # This is simplified for illustration
+        
+        try:
+            # Prepare context
+            loop = asyncio.get_event_loop()
+            self.request_context = loop.run_until_complete(self._prepare_context())
+            
+            # Run the server
+            # This would be replaced with actual MCP server logic
+            logger.info("Server running. Press Ctrl+C to stop.")
+            loop.run_forever()
+            
+        except KeyboardInterrupt:
+            logger.info("Server stopping due to keyboard interrupt")
+        finally:
+            # Clean up
+            if self.request_context:
+                loop.run_until_complete(self._cleanup_context(self.request_context))
+            logger.info(f"FastMCP server {self.name} stopped")
+    
+    def sse_app(self) -> Any:
+        """Return an ASGI app that can be mounted in a larger ASGI application
+        
+        This would return an ASGI application implementing the Server-Sent Events
+        transport for MCP.
+        """
+        # This is a stub - the actual implementation would return an ASGI app
+        # that implements the MCP protocol over SSE
+        return None

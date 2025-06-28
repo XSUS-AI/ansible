@@ -1,8 +1,4 @@
-ansible>=9.0.0
-ansible-runner>=2.3.0
 pydantic>=2.0.0
+ansible-runner>=2.3.2
 pyyaml>=6.0
-pydantic-ai>=0.8.0
-dotenv>=0.0.5
-python-dotenv>=1.0.0
-httpx>=0.25.0
+mcp>=0.3.0
