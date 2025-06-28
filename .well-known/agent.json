@@ -1,0 +1,111 @@
+{
+  "name": "AnsibleAgent",
+  "description": "A DevOps assistant that helps manage servers and infrastructure through Ansible.",
+  "url": "https://github.com/ansible/ansible",
+  "provider": {
+    "name": "Ansible MCP Agent",
+    "url": "https://github.com/ansible/ansible"
+  },
+  "version": "1.0.0",
+  "documentationUrl": "https://docs.ansible.com/",
+  "streaming": true,
+  "pushNotifications": false,
+  "stateTransitionHistory": true,
+  "authentication": {
+    "scheme": "None",
+    "credentials": []
+  },
+  "defaultInputModes": [
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "text/plain"
+  ],
+  "skills": [
+    {
+      "id": "run_playbooks",
+      "name": "Run Ansible Playbooks",
+      "description": "Run Ansible playbooks on remote servers using system SSH keys",
+      "tags": [
+        "ansible",
+        "playbook",
+        "automation"
+      ],
+      "examples": [
+        {
+          "input": "Run the deployment playbook on all web servers",
+          "output": "Running playbook 'deployment.yml' on group 'webservers'... Playbook execution completed successfully. 3 hosts updated, 0 failed.",
+          "description": "Running a playbook on a specific host group"
+        }
+      ]
+    },
+    {
+      "id": "ad_hoc_commands",
+      "name": "Execute Ad-Hoc Commands",
+      "description": "Run quick, one-off commands on remote servers",
+      "tags": [
+        "ansible",
+        "ad-hoc",
+        "command"
+      ],
+      "examples": [
+        {
+          "input": "Check disk space on all database servers",
+          "output": "Running 'df -h' on group 'dbservers'... Results: db1.example.com: Filesystem Size Used Avail Use% Mounted on /dev/sda1 50G 12G 38G 24% /",
+          "description": "Running a system command across multiple servers"
+        }
+      ]
+    },
+    {
+      "id": "manage_inventory",
+      "name": "Manage Inventory Files",
+      "description": "Create, read, and modify Ansible inventory files",
+      "tags": [
+        "ansible",
+        "inventory",
+        "hosts"
+      ],
+      "examples": [
+        {
+          "input": "Create an inventory file with production and staging web servers",
+          "output": "Created inventory file 'environment.yml' with groups: 'prod_web' (3 hosts) and 'staging_web' (2 hosts)",
+          "description": "Creating a structured inventory file"
+        }
+      ]
+    },
+    {
+      "id": "manage_playbooks",
+      "name": "Manage Playbook Files",
+      "description": "Create, read, and modify Ansible playbook files",
+      "tags": [
+        "ansible",
+        "playbook",
+        "yaml"
+      ],
+      "examples": [
+        {
+          "input": "Create a playbook to install and configure nginx",
+          "output": "Created playbook 'setup_nginx.yml' with tasks: install nginx package, configure virtual hosts, enable and start service",
+          "description": "Creating a playbook for a common server task"
+        }
+      ]
+    },
+    {
+      "id": "ssh_key_management",
+      "name": "SSH Key Management",
+      "description": "Use system SSH keys to securely connect to remote servers",
+      "tags": [
+        "ansible",
+        "ssh",
+        "security"
+      ],
+      "examples": [
+        {
+          "input": "Show me which SSH keys are available for connecting to servers",
+          "output": "Available SSH keys: id_rsa (RSA, user@host), id_ed25519 (ED25519, deployment@example.com)",
+          "description": "Listing available authentication keys"
+        }
+      ]
+    }
+  ]
+}

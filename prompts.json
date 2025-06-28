@@ -1,0 +1,28 @@
+{
+  "prompts": [
+    {
+      "name": "List SSH Keys", 
+      "text": "Show me the SSH keys available on this system."
+    },
+    {
+      "name": "Create Simple Inventory",
+      "text": "Create a simple inventory file with two web servers at 192.168.1.10 and 192.168.1.11 in a group called 'webservers', and a database server at 192.168.1.20 in a group called 'dbservers'. Make the inventory saved as 'simple_app.yml'."
+    },
+    {
+      "name": "Create Basic Playbook",
+      "text": "Create a basic playbook that installs nginx on all webservers and ensures it's running. Save it as 'install_nginx.yml'."
+    },
+    {
+      "name": "Run Ad-Hoc Command",
+      "text": "Run an ad-hoc command to check disk space usage (df -h) on all hosts in the inventory called 'simple_app.yml'."
+    },
+    {
+      "name": "Load and Modify Playbook",
+      "text": "Load the 'install_nginx.yml' playbook and add a task to set the firewall to allow HTTP and HTTPS traffic."
+    },
+    {
+      "name": "Create Complex Playbook",
+      "text": "Create a playbook called 'setup_app.yml' that does the following: 1) Install required packages on webservers (nginx, python3, git), 2) Clone a git repo to /var/www/app, 3) Set up a systemd service for the app, 4) Configure nginx to proxy to the application."
+    }
+  ]
+}
