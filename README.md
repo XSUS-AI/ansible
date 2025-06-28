@@ -17,20 +17,31 @@ Ansible MCP Agent is a powerful assistant that helps manage servers and infrastr
 - OpenAI API key or OpenRouter API key
 - SSH keys configured on the system (for remote connections)
 
+## Repository
+
+The project is available on GitHub:
+
+```bash
+# Clone the repository
+git clone git@github.com:XSUS-AI/ansible.git
+cd ansible
+```
+
+You can also use HTTPS if you don't have SSH keys configured for GitHub:
+
+```bash
+git clone https://github.com/XSUS-AI/ansible.git
+cd ansible
+```
+
 ## Installation
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/ansible-mcp-agent.git
-   cd ansible-mcp-agent
-   ```
-
-2. Install the required dependencies:
+1. Install the required dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Create a `.env` file with your API keys:
+2. Create a `.env` file with your API keys:
    ```
    OPENROUTER_API_KEY=your_openrouter_key
    ```
@@ -84,3 +95,13 @@ python agent.py --model anthropic/claude-3-opus
 - The agent only uses system SSH keys and cannot modify them
 - Access is restricted to hosts defined in inventory files
 - No credentials are stored in the agent itself
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
